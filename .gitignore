@@ -1,0 +1,9 @@
+build/
+
+*.o
+*.out
+
+.vscode/
+
+*.pt
+*.onnx
