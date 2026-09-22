@@ -4,7 +4,7 @@ Raspberry Pi / Embedded Linux 환경에서 USB Webcam 영상을 입력받아 YOL
 
 YOLO26n을 ONNX 형식으로 변환해 OpenCV DNN으로 추론하며, 영상 처리와 Network 처리를 분리한 C++ 기반 Pipeline을 구성했습니다.
 
-현재 Raspberry Pi Vision Client와 실제 Relay Server 간 Detection 전송, ACK 검증, Timeout / Retry까지 실장비 End-to-End 통신을 확인했습니다.
+현재 Raspberry Pi Vision Client에서 실제 Relay Server로 Detection 데이터를 전송하고, ACK 검증 후 SQLite에 저장되는 전체 End-to-End Pipeline까지 검증한 상태입니다.
 
 ---
 
@@ -262,7 +262,7 @@ vision-pi-01-000029-00000006 → ACK OK
 
 현재 **Raspberry Pi Vision Client ↔ Relay Server 간 Detection 전송 및 TCP + ACK End-to-End 통신까지 실제 장비에서 검증**했습니다.
 
-Relay Server의 SQLite `vision_data`에 실제 Row가 저장된 결과는 별도 검증 대상으로 구분합니다.
+Relay Server가 수신한 Detection Message가 SQLite `vision_data`에 저장되는 것까지 확인했습니다.
 
 ---
 
@@ -339,7 +339,6 @@ Vision / Network 비동기 처리, 객체 단위 메시지 프로토콜, Persist
 
 ## Next
 
-* Relay Server → SQLite 저장 Row 검증
 * Detection Visualization + FPS / Latency Overlay
 * ROI 기반 제한구역 판정 및 관제 Snapshot
 * 운영 환경 보안 및 안정성 보강
