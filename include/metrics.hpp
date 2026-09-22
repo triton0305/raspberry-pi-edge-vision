@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstddef>
 #include <mutex>
 
 class Metrics
@@ -10,7 +11,7 @@ class Metrics
 public:
   Metrics();
 
-  void recordFrame(double inference_ms);
+  void recordFrame(double inference_ms, std::size_t queue_size, std::uint64_t dropped_count);
   void recordMessageDelivery(double delivery_ms);
 
 private:

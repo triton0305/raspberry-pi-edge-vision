@@ -11,10 +11,10 @@ Metrics::Metrics()
 {
 }
 
-void Metrics::recordFrame(double inference_ms)
+void Metrics::recordFrame(double inference_ms, std::size_t queue_size, std::uint64_t dropped_count)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  
+
   ++frame_count_;
   inference_total_ms_ += inference_ms;
 
@@ -29,8 +29,10 @@ void Metrics::recordFrame(double inference_ms)
   const double average_inference_ms = inference_total_ms_ / frame_count_;
 
   std::cout << "Metrics: "
-            << "Effective FPS=" << effective_fps
-            << " | Avg Inference=" << average_inference_ms << " ms";
+          << "Effective FPS=" << effective_fps
+          << " | Avg Inference=" << average_inference_ms << " ms"
+          << " | Queue=" << queue_size
+          << " | Dropped=" << dropped_count;
 
   if (message_count_ > 0)
   {

@@ -1,29 +1,29 @@
 #include <opencv2/opencv.hpp>
 
 #include <chrono>
+#include <csignal>
 #include <cstdint>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
-#include <exception>
-#include <csignal>
 #include <thread>
+#include <vector>
 
+#include "ack.hpp"
 #include "camera.hpp"
 #include "config.hpp"
 #include "detection_result.hpp"
 #include "detector.hpp"
+#include "message_queue.hpp"
+#include "metrics.hpp"
+#include "network_worker.hpp"
 #include "postprocessor.hpp"
 #include "preprocessor.hpp"
 #include "serializer.hpp"
 #include "tcp_client.hpp"
-#include "ack.hpp"
-#include "metrics.hpp"
-#include "message_queue.hpp"
-#include "network_worker.hpp"
 
 volatile std::sig_atomic_t running = 1;
 
@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
   Serializer serializer;
   TcpClient tcp_client(server_ip, server_port);
   Metrics metrics;
-  MessageQueue message_queue;
+  MessageQueue message_queue(Config::MAX_QUEUE_SIZE);
   NetworkWorker network_worker(message_queue, tcp_client, metrics);
 
   if (!camera.open())
@@ -190,8 +190,6 @@ int main(int argc, char* argv[])
       outputs, frame.cols, frame.rows,
       preprocessor.inputWidth(), preprocessor.inputHeight());
 
-    metrics.recordFrame(inference_ms);
-
     for (const Detection& detection : detections)
     {
       ++sequence;
@@ -216,14 +214,17 @@ int main(int argc, char* argv[])
         }
       }
     }
+
+    metrics.recordFrame(
+      inference_ms,
+      message_queue.size(),
+      message_queue.droppedCount());
   }
 
   message_queue.close();
 
   if (network_thread.joinable())
     network_thread.join();
-
-
 
   tcp_client.disconnect();
   camera.release();

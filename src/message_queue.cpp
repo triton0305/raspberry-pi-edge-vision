@@ -1,6 +1,12 @@
 #include "message_queue.hpp"
 
+#include <iostream>
 #include <utility>
+
+MessageQueue::MessageQueue(std::size_t max_size)
+  : max_size_(max_size)
+{
+}
 
 bool MessageQueue::push(OutboundMessage message)
 {
@@ -9,6 +15,15 @@ bool MessageQueue::push(OutboundMessage message)
 
     if (closed_)
       return false;
+
+    if (queue_.size() >= max_size_)
+    {
+      std::cerr << "Queue full: dropping oldest message "
+                << queue_.front().message_id << '\n';
+
+      queue_.pop();
+      ++dropped_count_;
+    }
 
     queue_.push(std::move(message));
   }
@@ -44,4 +59,16 @@ void MessageQueue::close()
   }
 
   condition_.notify_all();
+}
+
+std::size_t MessageQueue::size() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return queue_.size();
+}
+
+std::uint64_t MessageQueue::droppedCount() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return dropped_count_;
 }
