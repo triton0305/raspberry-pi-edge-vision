@@ -32,8 +32,10 @@ Network Worker
 4-byte Length-Prefix TCP
     ↓
 Relay Server
-    ↓
-ACK Validation / Timeout / Retry
+    ├─ SQLite vision_data
+    └─ ACK Response
+         ↓
+Client ACK Validation / Timeout / Retry
 ```
 
 COCO 클래스 중 차량에 해당하는 객체만 탐지 대상으로 사용합니다.
