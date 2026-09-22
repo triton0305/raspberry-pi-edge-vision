@@ -1,4 +1,4 @@
-#include "camera.hpp"
+#include "vision/camera.hpp"
 
 #include <opencv2/videoio.hpp>
 

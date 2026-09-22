@@ -1,4 +1,4 @@
-#include "detector.hpp"
+#include "vision/detector.hpp"
 
 #include <stdexcept>
 

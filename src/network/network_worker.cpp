@@ -1,11 +1,11 @@
-#include "network_worker.hpp"
+#include "network/network_worker.hpp"
 
 #include <chrono>
 #include <iostream>
 #include <string>
 
-#include "ack.hpp"
-#include "config.hpp"
+#include "network/ack.hpp"
+#include "core/config.hpp"
 
 NetworkWorker::NetworkWorker(
   MessageQueue& queue,

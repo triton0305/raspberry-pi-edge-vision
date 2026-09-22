@@ -1,7 +1,7 @@
 #ifndef POSTPROCESSOR_HPP
 #define POSTPROCESSOR_HPP
 
-#include "detection_result.hpp"
+#include "core/detection_result.hpp"
 
 #include <opencv2/core.hpp>
 

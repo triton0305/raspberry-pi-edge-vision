@@ -1,5 +1,5 @@
-#include "tcp_client.hpp"
-#include "config.hpp"
+#include "network/tcp_client.hpp"
+#include "core/config.hpp"
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -130,7 +130,8 @@ bool TcpClient::readAll(void* data, std::size_t size)
 
       if (errno == EAGAIN || errno == EWOULDBLOCK)
       {
-        std::cerr << "Receive timeout\n";
+        std::cerr << "Receive timeout: received " << total_received
+                  << '/' << size << " bytes in current read\n";
         return false;
       }
 
@@ -181,6 +182,7 @@ bool TcpClient::receiveData(std::string& data)
 
   if (!readAll(&net_size, sizeof(net_size)))
   {
+    std::cerr << "Failed to receive ACK length prefix (4-byte big-endian)\n";
     return false;
   }
 
@@ -197,6 +199,8 @@ bool TcpClient::receiveData(std::string& data)
 
   if (!readAll(data.data(), data.size()))
   {
+    std::cerr << "Failed to receive ACK payload: expected "
+              << payload_size << " bytes\n";
     return false;
   }
 

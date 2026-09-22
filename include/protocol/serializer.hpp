@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "detection_result.hpp"
+#include "core/detection_result.hpp"
 
 class Serializer
 {

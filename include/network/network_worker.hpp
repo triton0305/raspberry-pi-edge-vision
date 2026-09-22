@@ -3,9 +3,9 @@
 
 #include <atomic>
 
-#include "message_queue.hpp"
-#include "metrics.hpp"
-#include "tcp_client.hpp"
+#include "network/message_queue.hpp"
+#include "core/metrics.hpp"
+#include "network/tcp_client.hpp"
 
 class NetworkWorker
 {

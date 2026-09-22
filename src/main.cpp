@@ -1,84 +1,28 @@
-#include <opencv2/opencv.hpp>
-
-#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <exception>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <thread>
-#include <vector>
 
-#include "ack.hpp"
-#include "camera.hpp"
-#include "config.hpp"
-#include "detection_result.hpp"
-#include "detector.hpp"
-#include "message_queue.hpp"
-#include "metrics.hpp"
-#include "network_worker.hpp"
-#include "postprocessor.hpp"
-#include "preprocessor.hpp"
-#include "serializer.hpp"
-#include "tcp_client.hpp"
+#include "core/boot_id.hpp"
+#include "vision/camera.hpp"
+#include "core/config.hpp"
+#include "vision/detector.hpp"
+#include "network/message_queue.hpp"
+#include "core/metrics.hpp"
+#include "network/network_worker.hpp"
+#include "vision/postprocessor.hpp"
+#include "vision/preprocessor.hpp"
+#include "protocol/serializer.hpp"
+#include "network/tcp_client.hpp"
+#include "vision/vision_worker.hpp"
 
 volatile std::sig_atomic_t running = 1;
 
 void handleSignal(int)
 {
   running = 0;
-}
-
-std::int64_t currentUnixTimeMs()
-{
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-    std::chrono::system_clock::now().time_since_epoch()).count();
-}
-
-bool loadAndIncrementBootId(std::uint64_t& boot_id)
-{
-  boot_id = 0;
-
-  std::ifstream input(Config::BOOT_ID_PATH);
-
-  if (input.is_open())
-  {
-    input >> boot_id;
-
-    if (input.fail())
-    {
-      std::cerr << "Failed to read boot_id\n";
-      return false;
-    }
-  }
-
-  ++boot_id;
-
-  std::ofstream output(Config::BOOT_ID_PATH, std::ios::trunc);
-
-  if (!output.is_open())
-  {
-    std::cerr << "Failed to write boot_id\n";
-    return false;
-  }
-
-  output << boot_id << '\n';
-
-  return true;
-}
-
-std::string createMessageId(std::uint64_t boot_id, std::uint64_t sequence)
-{
-  std::ostringstream stream;
-
-  stream << Config::DEVICE_ID << '-'
-         << std::setfill('0') << std::setw(6) << boot_id << '-'
-         << std::setfill('0') << std::setw(8) << sequence;
-
-  return stream.str();
 }
 
 int main(int argc, char* argv[])
@@ -149,77 +93,13 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  std::uint64_t frame_id = 0;
-  std::uint64_t sequence = 0;
+  VisionWorker vision_worker(
+    camera, preprocessor, detector, postprocessor,
+    serializer, message_queue, network_worker, metrics,
+    boot_id, running);
 
   std::thread network_thread(&NetworkWorker::run, &network_worker);
-
-  std::cout << "Edge Vision loop started\n";
-  std::cout << "Boot ID: " << boot_id << '\n';
-  std::cout << "Press Ctrl+C to quit\n";
-
-  while (running)
-  {
-    if (network_worker.hasFailed())
-    {
-      std::cerr << "Network worker failed\n";
-      break;
-    }
-
-    cv::Mat frame;
-
-    if (!camera.read(frame))
-    {
-      std::cerr << "Failed to capture frame\n";
-      break;
-    }
-
-    const std::uint64_t current_frame_id = frame_id++;
-    const std::int64_t timestamp_ms = currentUnixTimeMs();
-
-    cv::Mat blob = preprocessor.process(frame);
-
-    const auto inference_start = std::chrono::steady_clock::now();
-    std::vector<cv::Mat> outputs = detector.infer(blob);
-    const auto inference_end = std::chrono::steady_clock::now();
-
-    const double inference_ms =
-      std::chrono::duration<double, std::milli>(inference_end - inference_start).count();
-
-    std::vector<Detection> detections = postprocessor.process(
-      outputs, frame.cols, frame.rows,
-      preprocessor.inputWidth(), preprocessor.inputHeight());
-
-    for (const Detection& detection : detections)
-    {
-      ++sequence;
-
-      const std::string message_id = createMessageId(boot_id, sequence);
-
-      DetectionResult result;
-      result.frame_id = current_frame_id;
-      result.timestamp_ms = timestamp_ms;
-
-      std::string message = serializer.serialize(result, detection, message_id);
-
-      if (!message.empty())
-      {
-        std::cout << message << '\n';
-
-        if (!message_queue.push({message_id, message}))
-        {
-          std::cerr << "Failed to enqueue message\n";
-          running = 0;
-          break;
-        }
-      }
-    }
-
-    metrics.recordFrame(
-      inference_ms,
-      message_queue.size(),
-      message_queue.droppedCount());
-  }
+  vision_worker.run();
 
   message_queue.close();
 

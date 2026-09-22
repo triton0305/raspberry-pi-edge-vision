@@ -1,4 +1,4 @@
-#include "message_queue.hpp"
+#include "network/message_queue.hpp"
 
 #include <iostream>
 #include <utility>

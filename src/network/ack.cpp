@@ -1,10 +1,10 @@
-#include "ack.hpp"
+#include "network/ack.hpp"
 
 #include <iostream>
 
 #include <nlohmann/json.hpp>
 
-#include "config.hpp"
+#include "core/config.hpp"
 
 AckResult checkAck(
   const std::string& ack_message,

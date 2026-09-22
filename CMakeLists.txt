@@ -66,16 +66,19 @@ set(BOOT_ID_PATH
 
 set(SOURCES
     src/main.cpp
-    src/camera.cpp
-    src/preprocessor.cpp
-    src/detector.cpp
-    src/postprocessor.cpp
-    src/serializer.cpp
-    src/tcp_client.cpp
-    src/metrics.cpp
-    src/ack.cpp
-    src/message_queue.cpp
-    src/network_worker.cpp
+    src/core/boot_id.cpp
+    src/core/message_id.cpp
+    src/vision/vision_worker.cpp
+    src/vision/camera.cpp
+    src/vision/preprocessor.cpp
+    src/vision/detector.cpp
+    src/vision/postprocessor.cpp
+    src/protocol/serializer.cpp
+    src/network/tcp_client.cpp
+    src/core/metrics.cpp
+    src/network/ack.cpp
+    src/network/message_queue.cpp
+    src/network/network_worker.cpp
 )
 
 # =============================================================================

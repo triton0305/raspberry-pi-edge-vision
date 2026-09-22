@@ -7,7 +7,7 @@
 #include <mutex>
 #include <queue>
 
-#include "outbound_message.hpp"
+#include "protocol/outbound_message.hpp"
 
 class MessageQueue
 {

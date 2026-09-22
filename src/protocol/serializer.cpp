@@ -1,8 +1,8 @@
-#include "serializer.hpp"
+#include "protocol/serializer.hpp"
 
 #include <nlohmann/json.hpp>
 
-#include "config.hpp"
+#include "core/config.hpp"
 
 std::string Serializer::serialize(
   const DetectionResult& result,
