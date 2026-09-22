@@ -8,7 +8,10 @@
 class Serializer
 {
 public:
-  std::string serialize(const DetectionResult& result) const;
+  std::string serialize(
+    const DetectionResult& result,
+    const Detection& detection,
+    const std::string& message_id) const;
 };
 
 #endif // SERIALIZER_HPP

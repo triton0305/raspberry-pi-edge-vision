@@ -1,23 +1,31 @@
 #include "serializer.hpp"
 
-#include <sstream>
+#include <nlohmann/json.hpp>
 
-std::string Serializer::serialize(const DetectionResult& result) const
+#include "config.hpp"
+
+std::string Serializer::serialize(
+  const DetectionResult& result,
+  const Detection& detection,
+  const std::string& message_id) const
 {
-  std::ostringstream oss;
+  nlohmann::json json;
 
-  for(const Detection& detection : result.detections)
-  {
-    oss << result.frame_id << '|'
-        << result.timestamp_ms << '|'
-        << detection.class_id << '|'
-        << detection.class_name << '|'
-        << detection.confidence << '|'
-        << detection.bbox.x << '|'
-        << detection.bbox.y << '|'
-        << detection.bbox.width << '|'
-        << detection.bbox.height << '\n';
-  }
+  json["version"] = Config::PROTOCOL_VERSION;
+  json["type"] = "vision";
+  json["device_id"] = Config::DEVICE_ID;
+  json["message_id"] = message_id;
 
-  return oss.str();
+  json["data"]["frame_id"] = result.frame_id;
+  json["data"]["timestamp_ms"] = result.timestamp_ms;
+  json["data"]["class_id"] = detection.class_id;
+  json["data"]["class_name"] = detection.class_name;
+  json["data"]["confidence"] = detection.confidence;
+
+  json["data"]["bbox"]["x"] = detection.bbox.x;
+  json["data"]["bbox"]["y"] = detection.bbox.y;
+  json["data"]["bbox"]["width"] = detection.bbox.width;
+  json["data"]["bbox"]["height"] = detection.bbox.height;
+
+  return json.dump();
 }

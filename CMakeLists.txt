@@ -69,6 +69,7 @@ set(SOURCES
     src/serializer.cpp
     src/tcp_client.cpp
     src/metrics.cpp
+    src/ack.cpp
 )
 
 # =============================================================================

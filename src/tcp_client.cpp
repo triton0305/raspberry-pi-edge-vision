@@ -4,6 +4,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <cerrno>
+#include <cstdint>
 #include <iostream>
 
 TcpClient::TcpClient(const std::string& server_ip, int server_port)
@@ -21,15 +23,11 @@ TcpClient::~TcpClient()
 
 bool TcpClient::connectToServer()
 {
-  if (connected_)
-  {
-    return true;
-  }
-
   socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+
   if (socket_fd_ < 0)
   {
-    std::cerr << "TcpClient: socket creation failed\n";
+    std::cerr << "Failed to create socket\n";
     return false;
   }
 
@@ -37,24 +35,88 @@ bool TcpClient::connectToServer()
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(server_port_);
 
-  if (inet_pton(AF_INET, server_ip_.c_str(), &server_addr.sin_addr) != 1)
+  if (inet_pton(AF_INET, server_ip_.c_str(), &server_addr.sin_addr) <= 0)
   {
-    std::cerr << "TcpClient: invalid server IP\n";
-    close(socket_fd_);
-    socket_fd_ = -1;
+    std::cerr << "Invalid server address\n";
+    disconnect();
     return false;
   }
 
-  if (connect(socket_fd_, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr)) < 0)
+  if (connect(
+        socket_fd_,
+        reinterpret_cast<sockaddr*>(&server_addr),
+        sizeof(server_addr)) < 0)
   {
-    std::cerr << "TcpClient: connection failed\n";
-    close(socket_fd_);
-    socket_fd_ = -1;
+    std::cerr << "Failed to connect to server\n";
+    disconnect();
     return false;
   }
 
   connected_ = true;
-  std::cout << "TcpClient: connected to " << server_ip_ << ":" << server_port_ << '\n';
+
+  return true;
+}
+
+bool TcpClient::sendAll(const void* data, std::size_t size)
+{
+  const char* buffer = static_cast<const char*>(data);
+  std::size_t total_sent = 0;
+
+  while (total_sent < size)
+  {
+    ssize_t sent = send(
+      socket_fd_,
+      buffer + total_sent,
+      size - total_sent,
+      0);
+
+    if (sent <= 0)
+    {
+      std::cerr << "Failed to send data\n";
+      disconnect();
+      return false;
+    }
+
+    total_sent += static_cast<std::size_t>(sent);
+  }
+
+  return true;
+}
+
+bool TcpClient::readAll(void* data, std::size_t size)
+{
+  char* buffer = static_cast<char*>(data);
+  std::size_t total_received = 0;
+
+  while (total_received < size)
+  {
+    ssize_t received = recv(
+      socket_fd_,
+      buffer + total_received,
+      size - total_received,
+      0);
+
+    if (received == 0)
+    {
+      std::cerr << "Server disconnected\n";
+      disconnect();
+      return false;
+    }
+
+    if (received < 0)
+    {
+      if (errno == EINTR)
+      {
+        continue;
+      }
+
+      std::cerr << "Failed to receive data\n";
+      disconnect();
+      return false;
+    }
+
+    total_received += static_cast<std::size_t>(received);
+  }
 
   return true;
 }
@@ -63,24 +125,54 @@ bool TcpClient::sendData(const std::string& data)
 {
   if (!connected_)
   {
-    std::cerr << "TcpClient: not connected\n";
+    std::cerr << "TCP client is not connected\n";
     return false;
   }
 
-  size_t total_sent = 0;
+  const std::uint32_t payload_size = static_cast<std::uint32_t>(data.size());
+  const std::uint32_t net_size = htonl(payload_size);
 
-  while (total_sent < data.size())
+  if (!sendAll(&net_size, sizeof(net_size)))
   {
-    ssize_t sent = send(socket_fd_, data.data() + total_sent, data.size() - total_sent, 0);
+    return false;
+  }
 
-    if (sent <= 0)
-    {
-      std::cerr << "TcpClient: send failed\n";
-      disconnect();
-      return false;
-    }
+  if (!sendAll(data.data(), data.size()))
+  {
+    return false;
+  }
 
-    total_sent += static_cast<size_t>(sent);
+  return true;
+}
+
+bool TcpClient::receiveData(std::string& data)
+{
+  if (!connected_)
+  {
+    std::cerr << "TCP client is not connected\n";
+    return false;
+  }
+
+  std::uint32_t net_size = 0;
+
+  if (!readAll(&net_size, sizeof(net_size)))
+  {
+    return false;
+  }
+
+  const std::uint32_t payload_size = ntohl(net_size);
+
+  if (payload_size == 0 || payload_size > 1024 * 1024)
+  {
+    std::cerr << "Invalid payload size: " << payload_size << '\n';
+    return false;
+  }
+
+  data.resize(payload_size);
+
+  if (!readAll(data.data(), data.size()))
+  {
+    return false;
   }
 
   return true;
