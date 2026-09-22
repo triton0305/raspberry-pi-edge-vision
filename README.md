@@ -333,7 +333,7 @@ src/
 
 Vision / Network 비동기 처리, 객체 단위 메시지 프로토콜, Persistent Boot ID 기반 Message ID, bounded queue, ACK / Timeout / Retry / Reconnect, Graceful Shutdown을 구현했습니다.
 
-현재 Raspberry Pi Vision Client와 실제 Relay Server 간 TCP + ACK End-to-End 통신까지 완료한 상태입니다.
+현재 Raspberry Pi Vision Client에서 실제 Relay Server로 Detection 데이터를 전송하고, ACK 검증 후 SQLite에 저장되는 전체 End-to-End Pipeline까지 검증한 상태입니다.
 
 ---
 
