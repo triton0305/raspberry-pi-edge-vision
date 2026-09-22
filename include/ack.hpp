@@ -10,13 +10,6 @@ enum class AckResult
   Invalid
 };
 
-AckResult checkAck(
-  const std::string& ack_message,
-  const std::string& expected_message_id,
-  std::string& error_code);
-
-bool validateAck(
-  const std::string& ack_message,
-  const std::string& expected_message_id);
+AckResult checkAck(const std::string& ack_message, const std::string& expected_message_id, std::string& error_code);
 
 #endif // ACK_HPP

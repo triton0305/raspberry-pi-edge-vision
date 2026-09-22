@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 
 struct BoundingBox
 {
@@ -25,7 +24,6 @@ struct DetectionResult
 {
   uint64_t frame_id;
   int64_t timestamp_ms;
-  std::vector<Detection> detections;
 };
 
 #endif // DETECTION_RESULT_HPP

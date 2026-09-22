@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <exception>
+#include <csignal>
 
 #include "camera.hpp"
 #include "config.hpp"
@@ -18,6 +20,13 @@
 #include "serializer.hpp"
 #include "tcp_client.hpp"
 #include "ack.hpp"
+
+volatile std::sig_atomic_t running = 1;
+
+void handleSignal(int)
+{
+  running = 0;
+}
 
 std::int64_t currentUnixTimeMs()
 {
@@ -68,8 +77,36 @@ std::string createMessageId(std::uint64_t boot_id, std::uint64_t sequence)
   return stream.str();
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+  std::signal(SIGINT, handleSignal);
+  std::signal(SIGTERM, handleSignal);
+
+  if (argc != 3)
+  {
+    std::cerr << "Usage: " << argv[0] << " <server_ip> <server_port>\n";
+    return 1;
+  }
+
+  const std::string server_ip = argv[1];
+  int server_port = 0;
+
+  try
+  {
+    server_port = std::stoi(argv[2]);
+  }
+  catch (const std::exception&)
+  {
+    std::cerr << "Invalid server port\n";
+    return 1;
+  }
+
+  if (server_port < 1 || server_port > 65535)
+  {
+    std::cerr << "Server port must be between 1 and 65535\n";
+    return 1;
+  }
+
   const std::string model_path = MODEL_PATH;
 
   Camera camera(0, 640, 480, 30);
@@ -77,7 +114,7 @@ int main()
   Detector detector(model_path);
   PostProcessor postprocessor(0.25f, 0.45f);
   Serializer serializer;
-  TcpClient tcp_client("10.10.16.3", 5000);
+  TcpClient tcp_client(server_ip, server_port);
 
   if (!camera.open())
   {
@@ -112,7 +149,7 @@ int main()
   std::cout << "Boot ID: " << boot_id << '\n';
   std::cout << "Press Ctrl+C to quit\n";
 
-  while (true)
+  while (running)
   {
     cv::Mat frame;
 
@@ -169,11 +206,18 @@ int main()
 
           if (!tcp_client.receiveData(ack_message))
           {
-            if (!tcp_client.isConnected())
+            std::cerr << "ACK receive failed: " << message_id << '\n';
+
+            tcp_client.disconnect();
+
+            if (attempt < Config::MAX_RETRY_COUNT)
             {
-              std::cerr << "Connection lost while waiting for ACK\n";
-              camera.release();
-              return 1;
+              if (!tcp_client.connectToServer())
+              {
+                std::cerr << "Failed to reconnect to server\n";
+                camera.release();
+                return 1;
+              }
             }
 
             continue;

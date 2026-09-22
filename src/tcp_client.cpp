@@ -76,15 +76,21 @@ bool TcpClient::sendAll(const void* data, std::size_t size)
 
   while (total_sent < size)
   {
-    ssize_t sent = send(
-      socket_fd_,
-      buffer + total_sent,
-      size - total_sent,
-      0);
+    ssize_t sent = send(socket_fd_, buffer + total_sent, size - total_sent, MSG_NOSIGNAL);
 
-    if (sent <= 0)
+    if (sent < 0)
     {
+      if (errno == EINTR)
+        continue;
+
       std::cerr << "Failed to send data\n";
+      disconnect();
+      return false;
+    }
+
+    if (sent == 0)
+    {
+      std::cerr << "Connection closed while sending data\n";
       disconnect();
       return false;
     }
@@ -183,6 +189,7 @@ bool TcpClient::receiveData(std::string& data)
   if (payload_size == 0 || payload_size > 1024 * 1024)
   {
     std::cerr << "Invalid payload size: " << payload_size << '\n';
+    disconnect();
     return false;
   }
 

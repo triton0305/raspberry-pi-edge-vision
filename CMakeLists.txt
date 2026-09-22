@@ -56,6 +56,10 @@ set(TEST_IMAGE_PATH
     "${CMAKE_SOURCE_DIR}/test/bus.jpg"
 )
 
+set(BOOT_ID_PATH
+    "${CMAKE_SOURCE_DIR}/boot_id.dat"
+)
+
 # =============================================================================
 # Sources
 # =============================================================================
@@ -108,6 +112,7 @@ target_compile_definitions(edge_vision
     PRIVATE
         MODEL_PATH="${MODEL_PATH}"
         TEST_IMAGE_PATH="${TEST_IMAGE_PATH}"
+        BOOT_ID_FILE_PATH="${BOOT_ID_PATH}"
 )
 
 # =============================================================================

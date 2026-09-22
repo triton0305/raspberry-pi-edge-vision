@@ -62,11 +62,3 @@ AckResult checkAck(
   std::cerr << "Invalid ACK status\n";
   return AckResult::Invalid;
 }
-
-bool validateAck(
-  const std::string& ack_message,
-  const std::string& expected_message_id)
-{
-  std::string error_code;
-  return checkAck(ack_message, expected_message_id, error_code) == AckResult::Ok;
-}
