@@ -1,10 +1,10 @@
 # Raspberry Pi Edge Vision
 
-Raspberry Pi / Embedded Linux 환경에서 USB Webcam 영상을 실시간으로 처리하고, YOLO26n 기반 차량 탐지 결과를 TCP 서버로 전달하는 Edge Vision 시스템입니다.
+Raspberry Pi / Embedded Linux 환경에서 USB Webcam 영상을 입력받아 YOLO26n으로 차량을 탐지하고, 탐지 결과를 TCP 서버로 전달하는 Edge Vision 시스템입니다.
 
-사전학습된 YOLO26n 모델을 ONNX 형식으로 변환해 OpenCV DNN으로 추론하며, 영상 입력과 후처리, 탐지 결과 구조화, TCP 통신을 C++ 기반으로 구성했습니다.
+YOLO26n을 ONNX 형식으로 변환해 OpenCV DNN으로 추론하며, 영상 처리와 Network 처리를 분리한 C++ 기반 Pipeline을 구성했습니다.
 
-1차 MVP에서는 Raspberry Pi에서 생성한 차량 탐지 데이터를 개발 PC의 C 기반 Dummy Server로 전송하고, 객체별 JSON 수신, ACK 검증, Timeout 및 Retry까지 End-to-End로 구현했습니다.
+현재 Raspberry Pi Vision Client와 실제 Relay Server 간 Detection 전송, ACK 검증, Timeout / Retry까지 실장비 End-to-End 통신을 확인했습니다.
 
 ---
 
@@ -15,23 +15,25 @@ Pleomax W-210 USB Webcam
     ↓
 Frame Capture (OpenCV + V4L2)
     ↓
-Pre-processing
+Letterbox 640 × 640
     ↓
 YOLO26n ONNX Inference
     ↓
-Vehicle Filtering + NMS
+Coordinate Restore + Clipping
     ↓
-Detection Result
+Vehicle Filtering + Class-aware NMS
     ↓
-JSON Serialization
+Object-based JSON
+    ↓
+MessageQueue
+    ↓
+Network Worker
     ↓
 4-byte Length-Prefix TCP
     ↓
-PC C Dummy Server
+Relay Server
     ↓
-ACK Validation
-    ↓
-Timeout / Retry
+ACK Validation / Timeout / Retry
 ```
 
 COCO 클래스 중 차량에 해당하는 객체만 탐지 대상으로 사용합니다.
@@ -43,51 +45,57 @@ COCO 클래스 중 차량에 해당하는 객체만 탐지 대상으로 사용�
 |        5 | bus        |
 |        7 | truck      |
 
-YOLO 후처리에는 Confidence Threshold `0.25`, NMS Threshold `0.45`를 적용합니다.
+Confidence Threshold `0.25`, NMS Threshold `0.45`를 적용합니다.
 
 ---
 
-## Implementation
+## Vision Processing
 
-### YOLO26n ONNX Inference
+USB Webcam의 `640 × 480` 프레임을 종횡비를 유지한 채 `640 × 640` Letterbox로 변환하고, Raspberry Pi CPU에서 YOLO26n ONNX 추론을 수행합니다.
 
-모델 검증에는 Ultralytics를 사용하고, Raspberry Pi에서 동작하는 Client는 YOLO26n ONNX 모델과 OpenCV DNN을 이용해 C++로 구성했습니다.
-
-USB Webcam 입력은 OpenCV의 V4L2 backend를 사용하며, `640 × 640` 입력으로 전처리한 뒤 CPU에서 추론합니다.
-
-### Detection Processing
-
-YOLO 출력에서 차량 클래스의 `class_id`, `class_name`, `confidence`, `bbox`를 추출하고 NMS를 적용합니다.
-
-각 프레임에는 `frame_id`와 Frame Capture 시점의 Unix timestamp(ms)인 `timestamp_ms`를 부여합니다.
-
-한 프레임에서 여러 객체가 검출될 수 있지만 네트워크에서는 각 객체를 독립된 메시지로 처리합니다.
+YOLO 출력 좌표는 Letterbox에 적용된 Scale과 Padding을 역산해 원본 좌표계로 복원합니다. 이후 Bounding Box를 이미지 범위로 Clipping하고 차량 Class Filtering과 Class-aware NMS를 적용합니다.
 
 ```text
-Frame 32
-├─ car   → Message 1
-├─ truck → Message 2
-└─ bus   → Message 3
+640 × 480 Frame
+    ↓
+Letterbox 640 × 640
+    ↓
+YOLO26n ONNX
+    ↓
+Original Coordinate Restore
+    ↓
+Bounding Box Clipping
+    ↓
+Vehicle Filtering
+    ↓
+Class-aware NMS
 ```
 
-같은 프레임에서 검출된 객체는 `frame_id`와 `timestamp_ms`가 같을 수 있지만 각각 다른 `message_id`를 가집니다.
-
-탐지된 객체가 없는 프레임은 전송하지 않습니다.
+각 프레임에는 `frame_id`와 Frame Capture 시점의 Unix timestamp(ms)인 `timestamp_ms`를 부여합니다.
 
 ---
 
 ## Message Protocol
 
-각 탐지 객체는 하나의 JSON 메시지로 직렬화합니다.
+한 프레임에서 여러 객체가 검출되더라도 각 Detection을 독립된 메시지로 처리합니다.
+
+```text
+Frame 32
+├─ car   → Message A
+├─ truck → Message B
+└─ bus   → Message C
+```
+
+같은 프레임의 객체는 `frame_id`와 `timestamp_ms`가 같을 수 있지만 각각 고유한 `message_id`를 가집니다. 탐지된 객체가 없는 프레임은 전송하지 않습니다.
 
 ```json
 {
   "version": 1,
   "type": "vision",
   "device_id": "vision-pi-01",
-  "message_id": "vision-pi-01-000009-00000001",
+  "message_id": "vision-pi-01-000029-00000006",
   "data": {
-    "frame_id": 32,
+    "frame_id": 33,
     "timestamp_ms": 1790043017712,
     "class_id": 2,
     "class_name": "car",
@@ -105,19 +113,15 @@ Frame 32
 전송 단위는 다음 기준으로 통일했습니다.
 
 ```text
-객체 1개
+Detection 1개
 = JSON Message 1개
 = message_id 1개
 = ACK 1개
 ```
 
-후단 SQLite 연동에서도 객체 하나를 하나의 Row로 저장하는 구조를 기준으로 합니다.
+후단 SQLite 저장도 객체 1개를 하나의 Row로 처리하는 구조를 기준으로 합니다.
 
----
-
-## Message ID
-
-메시지 식별자는 다음 형식을 사용합니다.
+### Message ID
 
 ```text
 <device_id>-<boot_id>-<sequence>
@@ -126,24 +130,55 @@ Frame 32
 예:
 
 ```text
-vision-pi-01-000009-00000001
+vision-pi-01-000029-00000006
 ```
 
-| Field       | Role              |
-| ----------- | ----------------- |
-| `device_id` | 장치 식별             |
-| `boot_id`   | Client 실행 세션 식별   |
-| `sequence`  | 해당 실행에서 전송한 객체 순번 |
+| Field       | Role               |
+| ----------- | ------------------ |
+| `device_id` | 장치 식별              |
+| `boot_id`   | Client 실행 세션 식별    |
+| `sequence`  | 실행 중 생성된 객체 메시지 순번 |
 
-`boot_id`는 로컬 파일에 저장해 실행 세션마다 증가시키고, `sequence`는 각 실행에서 다시 시작해 객체를 전송할 때마다 증가시킵니다.
+`boot_id`는 로컬 파일에 영속화하고 Client 실행 시 증가시킵니다. `sequence`는 실행마다 다시 시작합니다.
 
-이를 통해 Client가 재시작되어 `frame_id`가 초기화되더라도 이전 실행에서 생성된 메시지와 `message_id`가 충돌하지 않도록 했습니다.
+이를 통해 Client 재시작 후 `frame_id`와 `sequence`가 초기화되어도 이전 메시지와 ID가 충돌하지 않도록 구성했습니다.
 
 ---
 
-## TCP Framing
+## Threaded Network Pipeline
 
-TCP Stream에는 메시지 경계가 없기 때문에 JSON Payload 앞에 4-byte 길이 정보를 추가합니다.
+Vision Loop가 ACK 응답 시간에 직접 영향을 받지 않도록 Vision 처리와 Network 처리를 분리했습니다.
+
+```text
+Vision Worker
+    │
+    ▼
+MessageQueue
+    │
+    ▼
+Network Worker Thread
+    ├─ TCP Send
+    ├─ ACK Receive
+    ├─ ACK Validation
+    └─ Retry / Reconnect
+```
+
+Vision과 Network 사이에는 Thread-safe bounded queue를 사용합니다.
+
+```text
+Maximum Queue Size : 16
+Overflow Policy    : Drop Oldest
+```
+
+Queue가 가득 차면 가장 오래된 메시지를 제거해 최신 Detection을 유지하며, Queue Size와 Dropped Count를 Metrics로 확인합니다.
+
+`SIGINT`와 `SIGTERM`도 처리해 Vision Loop 종료 → Queue Close → Network Thread Join → Socket / Camera 해제 순서로 종료합니다.
+
+---
+
+## TCP Reliability
+
+TCP Stream의 메시지 경계를 복원하기 위해 JSON Payload 앞에 4-byte Length Prefix를 추가합니다.
 
 ```text
 ┌───────────────────────┬────────────────────────────┐
@@ -152,147 +187,113 @@ TCP Stream에는 메시지 경계가 없기 때문에 JSON Payload 앞에 4-byte
         big-endian                  N bytes
 ```
 
-Client는 JSON Payload 크기를 `uint32_t` Network Byte Order로 변환해 먼저 전송한 뒤 실제 Payload를 전송합니다.
+Partial Read / Write를 고려해 `sendAll()`과 `readAll()`에서 필요한 길이를 모두 처리할 때까지 반복 송수신하며, 송신에는 `MSG_NOSIGNAL`을 사용해 연결 종료 시 `SIGPIPE`를 방지합니다.
 
-송수신 과정에서는 한 번의 `send()` 또는 `recv()`로 전체 데이터가 처리된다고 가정하지 않고 `sendAll()`과 `readAll()`을 통해 필요한 길이만큼 반복 처리합니다.
-
----
-
-## ACK / Retry
-
-Dummy Server는 메시지를 정상적으로 수신하면 동일한 `message_id`를 포함한 ACK를 반환합니다.
+Server는 정상 처리한 메시지에 동일한 `message_id`를 포함한 ACK를 반환합니다.
 
 ```json
 {
   "version": 1,
   "type": "ack",
-  "message_id": "vision-pi-01-000009-00000001",
+  "message_id": "vision-pi-01-000029-00000006",
   "status": "ok"
 }
 ```
 
-Client는 ACK의 `version`, `type`, `message_id`, `status`를 검증합니다.
+Client는 `version`, `type`, `message_id`, `status`를 검증하고 `status: "error"` 응답은 `error_code`를 통해 구분합니다.
 
-Server가 오류를 반환한 경우 `status: "error"`와 함께 전달되는 `error_code`를 확인해 정상 ACK와 구분합니다.
-
-ACK 수신에는 `1.5초` Timeout을 적용했습니다.
+ACK Timeout은 `1500 ms`, 최대 Retry 횟수는 `2회`입니다. ACK Timeout 또는 수신 실패 시 연결을 다시 시도한 뒤 동일한 Payload와 `message_id`로 재전송합니다.
 
 ```text
-Message 전송
+Initial Send
     ↓
-ACK 대기 (1.5 s)
+ACK Wait (1.5 s)
     ↓
-ACK OK ─────────────→ 다음 객체
+ACK OK ───────────→ Complete
     │
-    └─ Timeout
-         ↓
-   동일 message_id로 Retry
-         ↓
-   최대 2회 재전송
+    └─ Timeout / Receive Failure
+              ↓
+           Reconnect
+              ↓
+      Same Payload / message_id
+              ↓
+            Retry
 ```
 
-ACK가 Timeout되면 새로운 메시지를 생성하지 않고 **동일한 `message_id`와 동일 Payload를 유지한 채 최대 2회 재전송**합니다.
-
-Retry 한도를 초과하거나 연결이 끊어진 경우 현재 Client 실행을 종료하도록 처리했습니다.
+최초 전송을 포함해 최대 3회의 전송 기회를 가집니다.
 
 ---
 
-## End-to-End Validation
+## Performance
 
-개발 PC에 C 기반 Dummy Server를 구성하고 Raspberry Pi와 실제 TCP 통신을 검증했습니다.
+Raspberry Pi 4 CPU 환경에서 Pipeline을 실행하며 성능과 Queue 상태를 측정했습니다.
 
-Server에서 실제 수신한 Payload:
+| Metric              |        Measured |
+| ------------------- | --------------: |
+| Effective FPS       | ~2.2 – 2.34 FPS |
+| Inference Latency   |   ~405 – 425 ms |
+| Delivery Latency    |   ~100 – 130 ms |
+| Observed Queue Size |       Max 3 → 0 |
+| Dropped Messages    |               0 |
 
-```text
-Payload size: 266 bytes
+Network 처리를 별도 Worker로 분리한 상태에서 Vision Loop가 약 `2.2 ~ 2.3 FPS` 수준으로 유지됐으며, 테스트 구간에서는 Queue가 정상적으로 소진되고 Message Drop이 발생하지 않았습니다.
 
-{"data":{"bbox":{"height":229,"width":273,"x":242,"y":84},"class_id":2,"class_name":"car","confidence":0.27056142687797546,"frame_id":32,"timestamp_ms":1790043017712},"device_id":"vision-pi-01","message_id":"vision-pi-01-000009-00000001","type":"vision","version":1}
-```
-
-Server ACK:
-
-```text
-ACK sent: {"version":1,"type":"ack","message_id":"vision-pi-01-000009-00000001","status":"ok"}
-```
-
-1차 MVP에서 실제 검증한 범위는 다음과 같습니다.
-
-```text
-USB Webcam
-→ YOLO26n ONNX
-→ Vehicle Detection
-→ Object-based JSON
-→ Length-Prefix TCP
-→ PC C Dummy Server
-→ ACK Validation
-→ Timeout / Retry
-```
-
-TCP Server의 IPv4 주소와 Port는 `TcpClient` 생성 시 지정합니다.
-
-```cpp
-TcpClient tcp_client("SERVER_IP", 5000);
-```
-
-연결 대상이 변경되더라도 네트워크 처리 로직을 수정하지 않고 Server IP와 Port만 변경할 수 있습니다.
+> 측정값은 현재 Raspberry Pi 4 / CPU inference 테스트 환경 기준입니다.
 
 ---
 
-## Design
+## Relay Server Integration
 
-### Object-based Message
+초기 통신 기능은 개발 PC의 C Dummy Server로 검증한 뒤 실제 Relay Server와 연동했습니다.
 
-초기에는 한 프레임에서 탐지된 여러 객체를 배열로 묶어 전송하는 구조를 검토했지만, Server와 DB의 처리 단위를 맞추기 위해 객체별 메시지 구조로 변경했습니다.
+Client는 Server IP와 Port를 실행 인자로 전달받습니다.
 
-```text
-Frame
-├─ Detection A → JSON A → message_id A → ACK A
-├─ Detection B → JSON B → message_id B → ACK B
-└─ Detection C → JSON C → message_id C → ACK C
+```bash
+./bin/edge_vision <server_ip> <server_port>
 ```
 
-객체마다 고유한 `message_id`를 부여해 ACK 확인과 Retry를 동일한 객체 단위로 처리합니다.
-
-향후 SQLite 저장 역시 같은 단위를 사용하도록 프로토콜을 구성했습니다.
-
-### Vision / Network Separation
-
-Vision 처리와 Socket 처리를 직접 결합하지 않고 데이터 구조화와 직렬화 단계를 분리했습니다.
+실제 Relay Server 테스트에서 연속 Detection Message에 대한 ACK를 확인했습니다.
 
 ```text
-PostProcessor
-    ↓
-Detection Result
-    ↓
-Serializer
-    ↓
-TcpClient
+vision-pi-01-000029-00000004 → ACK OK
+vision-pi-01-000029-00000005 → ACK OK
+vision-pi-01-000029-00000006 → ACK OK
 ```
 
-`main.cpp`는 전체 실행 흐름을 연결하고 Camera 입력, 추론, 후처리, 직렬화, TCP 통신은 각각의 모듈이 담당합니다.
+현재 **Raspberry Pi Vision Client ↔ Relay Server 간 Detection 전송 및 TCP + ACK End-to-End 통신까지 실제 장비에서 검증**했습니다.
 
-### Client / Server Separation
-
-Edge Vision Client는 영상 처리와 탐지 결과 전송을 담당하고, Server / DB 영역은 TCP Interface를 기준으로 분리했습니다.
-
-1차 MVP에서는 실제 후단 Server 연동 전에 개발 PC의 C Dummy Server를 이용해 TCP 송수신과 ACK / Retry 동작을 검증했습니다.
+Relay Server의 SQLite `vision_data`에 실제 Row가 저장된 결과는 별도 검증 대상으로 구분합니다.
 
 ---
 
 ## Project Structure
 
-| Module            | Role                                            |
-| ----------------- | ----------------------------------------------- |
-| `Camera`          | USB Webcam / V4L2 Frame Capture                 |
-| `Preprocessor`    | YOLO 입력 전처리                                     |
-| `Detector`        | YOLO26n ONNX 추론                                 |
-| `PostProcessor`   | 차량 필터링, Bounding Box 처리, NMS                    |
-| `DetectionResult` | Frame / Detection 데이터 구조                        |
-| `Serializer`      | 객체별 JSON 직렬화                                    |
-| `TcpClient`       | Length-Prefix 기반 TCP 송수신, ACK Timeout 처리        |
-| `Ack`             | ACK JSON 파싱 및 응답 검증                             |
-| `Config`          | Device ID, Protocol Version, Timeout / Retry 설정 |
-| `main`            | 전체 Pipeline 실행, Message ID 생성 및 Retry 제어        |
+소스는 기능 책임을 기준으로 `core / vision / protocol / network` 영역으로 분리했습니다.
+
+```text
+include/
+├── core/
+├── vision/
+├── protocol/
+└── network/
+
+src/
+├── core/
+├── vision/
+├── protocol/
+├── network/
+└── main.cpp
+```
+
+| Area       | Role                                                        |
+| ---------- | ----------------------------------------------------------- |
+| `core`     | Config, Boot ID, Message ID, DetectionResult, Metrics       |
+| `vision`   | Camera, Preprocessor, Detector, PostProcessor, VisionWorker |
+| `protocol` | JSON Serialization, Outbound Message                        |
+| `network`  | TCP Client, ACK, MessageQueue, NetworkWorker                |
+| `main.cpp` | 객체 생성, 초기화, 실행 및 종료 흐름                                      |
+
+`main.cpp`는 세부 기능 대신 각 모듈의 초기화와 실행 Lifecycle을 관리합니다.
 
 ---
 
@@ -312,48 +313,34 @@ Edge Vision Client는 영상 처리와 탐지 결과 전송을 담당하고, Ser
 
 ### Software / Inference
 
-| Item               | Value                            |
-| ------------------ | -------------------------------- |
-| Language           | C++17                            |
-| Build              | CMake                            |
-| Vision / Inference | OpenCV / OpenCV DNN              |
-| Inference Target   | CPU                              |
-| Model              | YOLO26n ONNX                     |
-| Model Input        | 640 × 640                        |
-| Network            | TCP/IP                           |
-| Serialization      | JSON                             |
-| Test Server        | C Dummy Server on Development PC |
+| Item               | Value                                    |
+| ------------------ | ---------------------------------------- |
+| Language           | C++17                                    |
+| Build              | CMake                                    |
+| Vision / Inference | OpenCV / OpenCV DNN                      |
+| Inference Target   | CPU                                      |
+| Model              | YOLO26n ONNX                             |
+| Model Input        | 640 × 640                                |
+| Serialization      | nlohmann/json                            |
+| Network            | TCP/IP                                   |
+| Threading          | `std::thread`, Mutex, Condition Variable |
 
 > Camera의 30 FPS는 설정 요청값이며, 실제 Frame Grab 성능은 테스트 환경에서 약 21.6 FPS로 확인했습니다.
 
 ---
 
-## 1st MVP Status
+## Current Status
 
-1차 MVP에서 다음 구간을 구현하고 Raspberry Pi와 개발 PC를 이용해 실제 동작을 확인했습니다.
+Vision / Network 비동기 처리, 객체 단위 메시지 프로토콜, Persistent Boot ID 기반 Message ID, bounded queue, ACK / Timeout / Retry / Reconnect, Graceful Shutdown을 구현했습니다.
 
-```text
-USB Webcam Capture
-→ YOLO26n ONNX Inference
-→ Vehicle Detection
-→ Object-based JSON
-→ Message ID
-→ 4-byte Length-Prefix TCP
-→ PC C Dummy Server
-→ ACK Validation
-→ Timeout / Retry
-```
-
-현재 **Vision Client의 실시간 탐지와 기본 신뢰성 처리를 포함한 TCP End-to-End Pipeline**까지 완료한 상태입니다.
+현재 Raspberry Pi Vision Client와 실제 Relay Server 간 TCP + ACK End-to-End 통신까지 완료한 상태입니다.
 
 ---
 
 ## Next
 
-* 실제 C Server / SQLite 통합
-* TCP 연결 끊김 및 재연결 처리
-* ROI 기반 제한구역 진입 판정
-* AI / Network Thread 분리 및 Queue 적용
-* Graceful Shutdown
-* FPS / Inference Latency 측정
-* CPU / RAM / Queue 상태 모니터링
+* Relay Server → SQLite 저장 Row 검증
+* Detection Visualization + FPS / Latency Overlay
+* ROI 기반 제한구역 판정 및 관제 Snapshot
+* 운영 환경 보안 및 안정성 보강
+* Jetson / TensorRT 기반 성능 확장
