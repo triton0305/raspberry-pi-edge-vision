@@ -6,41 +6,67 @@
 
 #include "config.hpp"
 
-bool validateAck(
+AckResult checkAck(
   const std::string& ack_message,
-  const std::string& expected_message_id)
+  const std::string& expected_message_id,
+  std::string& error_code)
 {
+  error_code.clear();
+
   nlohmann::json ack = nlohmann::json::parse(ack_message, nullptr, false);
 
   if (ack.is_discarded())
   {
     std::cerr << "Invalid ACK JSON\n";
-    return false;
+    return AckResult::Invalid;
   }
 
   if (ack.value("version", 0) != Config::PROTOCOL_VERSION)
   {
     std::cerr << "Invalid ACK version\n";
-    return false;
+    return AckResult::Invalid;
   }
 
   if (ack.value("type", "") != "ack")
   {
     std::cerr << "Invalid ACK type\n";
-    return false;
+    return AckResult::Invalid;
   }
 
   if (ack.value("message_id", "") != expected_message_id)
   {
     std::cerr << "ACK message_id mismatch\n";
-    return false;
+    return AckResult::Invalid;
   }
 
-  if (ack.value("status", "") != "ok")
+  const std::string status = ack.value("status", "");
+
+  if (status == "ok")
   {
-    std::cerr << "ACK status is not ok\n";
-    return false;
+    return AckResult::Ok;
   }
 
-  return true;
+  if (status == "error")
+  {
+    error_code = ack.value("error_code", "");
+
+    if (error_code.empty())
+    {
+      std::cerr << "Missing ACK error_code\n";
+      return AckResult::Invalid;
+    }
+
+    return AckResult::ServerError;
+  }
+
+  std::cerr << "Invalid ACK status\n";
+  return AckResult::Invalid;
+}
+
+bool validateAck(
+  const std::string& ack_message,
+  const std::string& expected_message_id)
+{
+  std::string error_code;
+  return checkAck(ack_message, expected_message_id, error_code) == AckResult::Ok;
 }

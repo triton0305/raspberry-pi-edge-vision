@@ -179,17 +179,28 @@ int main()
             continue;
           }
 
-          if (!validateAck(ack_message, message_id))
-          {
-            std::cerr << "Failed to validate ACK\n";
-            tcp_client.disconnect();
-            camera.release();
-            return 1;
-          }
+            std::string error_code;
+            AckResult ack_result = checkAck(ack_message, message_id, error_code);
 
-          std::cout << "ACK OK: " << message_id << '\n';
-          ack_received = true;
-          break;
+            if (ack_result == AckResult::ServerError)
+            {
+              std::cerr << "Server error: " << error_code << '\n';
+              tcp_client.disconnect();
+              camera.release();
+              return 1;
+            }
+
+            if (ack_result == AckResult::Invalid)
+            {
+              std::cerr << "Failed to validate ACK\n";
+              tcp_client.disconnect();
+              camera.release();
+              return 1;
+            }
+
+            std::cout << "ACK OK: " << message_id << '\n';
+            ack_received = true;
+            break;
         }
 
         if (!ack_received)
