@@ -1,4 +1,5 @@
 #include "tcp_client.hpp"
+#include "config.hpp"
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -28,6 +29,17 @@ bool TcpClient::connectToServer()
   if (socket_fd_ < 0)
   {
     std::cerr << "Failed to create socket\n";
+    return false;
+  }
+
+  timeval receive_timeout{};
+  receive_timeout.tv_sec = Config::ACK_TIMEOUT_MS / 1000;
+  receive_timeout.tv_usec = (Config::ACK_TIMEOUT_MS % 1000) * 1000;
+
+  if (setsockopt(socket_fd_, SOL_SOCKET, SO_RCVTIMEO, &receive_timeout, sizeof(receive_timeout)) < 0)
+  {
+    std::cerr << "Failed to set receive timeout\n";
+    disconnect();
     return false;
   }
 
@@ -108,6 +120,12 @@ bool TcpClient::readAll(void* data, std::size_t size)
       if (errno == EINTR)
       {
         continue;
+      }
+
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+      {
+        std::cerr << "Receive timeout\n";
+        return false;
       }
 
       std::cerr << "Failed to receive data\n";

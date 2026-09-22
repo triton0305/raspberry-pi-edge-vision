@@ -148,34 +148,57 @@ int main()
       {
         std::cout << message << '\n';
 
-        if (!tcp_client.sendData(message))
+        bool ack_received = false;
+
+        for (int attempt = 0; attempt <= Config::MAX_RETRY_COUNT; ++attempt)
         {
-          std::cerr << "Failed to send detection result\n";
+          if (attempt > 0)
+          {
+            std::cerr << "Retry " << attempt << '/' << Config::MAX_RETRY_COUNT << ": " << message_id << '\n';
+          }
+
+          if (!tcp_client.sendData(message))
+          {
+            std::cerr << "Failed to send detection result\n";
+            tcp_client.disconnect();
+            camera.release();
+            return 1;
+          }
+
+          std::string ack_message;
+
+          if (!tcp_client.receiveData(ack_message))
+          {
+            if (!tcp_client.isConnected())
+            {
+              std::cerr << "Connection lost while waiting for ACK\n";
+              camera.release();
+              return 1;
+            }
+
+            continue;
+          }
+
+          if (!validateAck(ack_message, message_id))
+          {
+            std::cerr << "Failed to validate ACK\n";
+            tcp_client.disconnect();
+            camera.release();
+            return 1;
+          }
+
+          std::cout << "ACK OK: " << message_id << '\n';
+          ack_received = true;
+          break;
+        }
+
+        if (!ack_received)
+        {
+          std::cerr << "ACK retry limit exceeded: " << message_id << '\n';
           tcp_client.disconnect();
           camera.release();
           return 1;
         }
-
-        std::string ack_message;
-
-        if (!tcp_client.receiveData(ack_message))
-        {
-          std::cerr << "Failed to receive ACK\n";
-          tcp_client.disconnect();
-          camera.release();
-          return 1;
-        }
-
-        if (!validateAck(ack_message, message_id))
-        {
-          std::cerr << "Failed to validate ACK\n";
-          tcp_client.disconnect();
-          camera.release();
-          return 1;
-        }
-
-        std::cout << "ACK OK: " << message_id << '\n';
-
       }
     }
   }
