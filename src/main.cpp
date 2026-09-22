@@ -10,6 +10,7 @@
 #include <vector>
 #include <exception>
 #include <csignal>
+#include <thread>
 
 #include "camera.hpp"
 #include "config.hpp"
@@ -21,6 +22,8 @@
 #include "tcp_client.hpp"
 #include "ack.hpp"
 #include "metrics.hpp"
+#include "message_queue.hpp"
+#include "network_worker.hpp"
 
 volatile std::sig_atomic_t running = 1;
 
@@ -117,6 +120,8 @@ int main(int argc, char* argv[])
   Serializer serializer;
   TcpClient tcp_client(server_ip, server_port);
   Metrics metrics;
+  MessageQueue message_queue;
+  NetworkWorker network_worker(message_queue, tcp_client, metrics);
 
   if (!camera.open())
   {
@@ -147,12 +152,20 @@ int main(int argc, char* argv[])
   std::uint64_t frame_id = 0;
   std::uint64_t sequence = 0;
 
+  std::thread network_thread(&NetworkWorker::run, &network_worker);
+
   std::cout << "Edge Vision loop started\n";
   std::cout << "Boot ID: " << boot_id << '\n';
   std::cout << "Press Ctrl+C to quit\n";
 
   while (running)
   {
+    if (network_worker.hasFailed())
+    {
+      std::cerr << "Network worker failed\n";
+      break;
+    }
+
     cv::Mat frame;
 
     if (!camera.read(frame))
@@ -195,87 +208,22 @@ int main(int argc, char* argv[])
       {
         std::cout << message << '\n';
 
-        const auto delivery_start = std::chrono::steady_clock::now();
-
-        bool ack_received = false;
-
-        for (int attempt = 0; attempt <= Config::MAX_RETRY_COUNT; ++attempt)
+        if (!message_queue.push({message_id, message}))
         {
-          if (attempt > 0)
-          {
-            std::cerr << "Retry " << attempt << '/' << Config::MAX_RETRY_COUNT << ": " << message_id << '\n';
-          }
-
-          if (!tcp_client.sendData(message))
-          {
-            std::cerr << "Failed to send detection result\n";
-            tcp_client.disconnect();
-            camera.release();
-            return 1;
-          }
-
-          std::string ack_message;
-
-          if (!tcp_client.receiveData(ack_message))
-          {
-            std::cerr << "ACK receive failed: " << message_id << '\n';
-
-            tcp_client.disconnect();
-
-            if (attempt < Config::MAX_RETRY_COUNT)
-            {
-              if (!tcp_client.connectToServer())
-              {
-                std::cerr << "Failed to reconnect to server\n";
-                camera.release();
-                return 1;
-              }
-            }
-
-            continue;
-          }
-
-          std::string error_code;
-          AckResult ack_result = checkAck(ack_message, message_id, error_code);
-
-          if (ack_result == AckResult::ServerError)
-          {
-            std::cerr << "Server error: " << error_code << '\n';
-            tcp_client.disconnect();
-            camera.release();
-            return 1;
-          }
-
-          if (ack_result == AckResult::Invalid)
-          {
-            std::cerr << "Failed to validate ACK\n";
-            tcp_client.disconnect();
-            camera.release();
-            return 1;
-          }
-
-          const auto delivery_end = std::chrono::steady_clock::now();
-
-          const double delivery_ms =
-            std::chrono::duration<double, std::milli>(delivery_end - delivery_start).count();
-
-          metrics.recordMessageDelivery(delivery_ms);
-
-          std::cout << "ACK OK: " << message_id << '\n';
-          ack_received = true;
+          std::cerr << "Failed to enqueue message\n";
+          running = 0;
           break;
-        }
-
-        if (!ack_received)
-        {
-          std::cerr << "ACK retry limit exceeded: " << message_id << '\n';
-          tcp_client.disconnect();
-          camera.release();
-          return 1;
         }
       }
     }
   }
+
+  message_queue.close();
+
+  if (network_thread.joinable())
+    network_thread.join();
+
+
 
   tcp_client.disconnect();
   camera.release();

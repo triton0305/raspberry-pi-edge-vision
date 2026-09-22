@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 
 class Metrics
 {
@@ -18,6 +19,7 @@ private:
   std::uint64_t message_count_;
   double inference_total_ms_;
   double delivery_total_ms_;
+  std::mutex mutex_;
 };
 
 #endif // METRICS_HPP

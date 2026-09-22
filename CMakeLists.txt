@@ -74,6 +74,8 @@ set(SOURCES
     src/tcp_client.cpp
     src/metrics.cpp
     src/ack.cpp
+    src/message_queue.cpp
+    src/network_worker.cpp
 )
 
 # =============================================================================

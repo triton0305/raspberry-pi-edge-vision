@@ -13,6 +13,8 @@ Metrics::Metrics()
 
 void Metrics::recordFrame(double inference_ms)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
+  
   ++frame_count_;
   inference_total_ms_ += inference_ms;
 
