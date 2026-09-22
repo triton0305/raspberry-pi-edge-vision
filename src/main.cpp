@@ -70,7 +70,7 @@ std::string createMessageId(std::uint64_t boot_id, std::uint64_t sequence)
 
 int main()
 {
-  const std::string model_path = "../models/yolo26n.onnx";
+  const std::string model_path = MODEL_PATH;
 
   Camera camera(0, 640, 480, 30);
   Preprocessor preprocessor(640, 640);
@@ -179,28 +179,28 @@ int main()
             continue;
           }
 
-            std::string error_code;
-            AckResult ack_result = checkAck(ack_message, message_id, error_code);
+          std::string error_code;
+          AckResult ack_result = checkAck(ack_message, message_id, error_code);
 
-            if (ack_result == AckResult::ServerError)
-            {
-              std::cerr << "Server error: " << error_code << '\n';
-              tcp_client.disconnect();
-              camera.release();
-              return 1;
-            }
+          if (ack_result == AckResult::ServerError)
+          {
+            std::cerr << "Server error: " << error_code << '\n';
+            tcp_client.disconnect();
+            camera.release();
+            return 1;
+          }
 
-            if (ack_result == AckResult::Invalid)
-            {
-              std::cerr << "Failed to validate ACK\n";
-              tcp_client.disconnect();
-              camera.release();
-              return 1;
-            }
+          if (ack_result == AckResult::Invalid)
+          {
+            std::cerr << "Failed to validate ACK\n";
+            tcp_client.disconnect();
+            camera.release();
+            return 1;
+          }
 
-            std::cout << "ACK OK: " << message_id << '\n';
-            ack_received = true;
-            break;
+          std::cout << "ACK OK: " << message_id << '\n';
+          ack_received = true;
+          break;
         }
 
         if (!ack_received)

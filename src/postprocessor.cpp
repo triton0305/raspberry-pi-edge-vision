@@ -12,12 +12,7 @@ PostProcessor::PostProcessor(float conf_threshold, float nms_threshold)
 {
 }
 
-std::vector<Detection> PostProcessor::process(
-  const std::vector<cv::Mat>& outputs,
-  int image_width,
-  int image_height,
-  int input_width,
-  int input_height)
+std::vector<Detection> PostProcessor::process(const std::vector<cv::Mat>& outputs, int image_width, int image_height, int input_width, int input_height)
 {
   std::vector<Detection> results;
 
@@ -70,14 +65,16 @@ std::vector<Detection> PostProcessor::process(
 
     int left = static_cast<int>((cx - width / 2.0f) * x_factor);
     int top = static_cast<int>((cy - height / 2.0f) * y_factor);
-    int box_width = static_cast<int>(width * x_factor);
-    int box_height = static_cast<int>(height * y_factor);
+    int right = static_cast<int>((cx + width / 2.0f) * x_factor);
+    int bottom = static_cast<int>((cy + height / 2.0f) * y_factor);
 
-    left = std::max(0, left);
-    top = std::max(0, top);
+    left = std::clamp(left, 0, image_width);
+    top = std::clamp(top, 0, image_height);
+    right = std::clamp(right, 0, image_width);
+    bottom = std::clamp(bottom, 0, image_height);
 
-    box_width = std::min(box_width, image_width - left);
-    box_height = std::min(box_height, image_height - top);
+    int box_width = right - left;
+    int box_height = bottom - top;
 
     if (box_width <= 0 || box_height <= 0)
       continue;
@@ -88,16 +85,36 @@ std::vector<Detection> PostProcessor::process(
   }
 
   std::vector<int> indices;
+  const int vehicle_classes[] = {2, 3, 5, 7};
 
-  cv::dnn::NMSBoxes(
-    boxes, confidences, conf_threshold_, nms_threshold_, indices);
+  for (int vehicle_class : vehicle_classes)
+  {
+    std::vector<cv::Rect> class_boxes;
+    std::vector<float> class_confidences;
+    std::vector<int> class_indices;
+
+    for (std::size_t i = 0; i < class_ids.size(); ++i)
+    {
+      if (class_ids[i] != vehicle_class)
+        continue;
+
+      class_boxes.push_back(boxes[i]);
+      class_confidences.push_back(confidences[i]);
+      class_indices.push_back(static_cast<int>(i));
+    }
+
+    std::vector<int> nms_indices;
+    cv::dnn::NMSBoxes(class_boxes, class_confidences, conf_threshold_, nms_threshold_, nms_indices);
+
+    for (int index : nms_indices)
+      indices.push_back(class_indices[index]);
+  }
 
   for (int index : indices)
   {
     const cv::Rect& box = boxes[index];
 
     Detection detection;
-
     detection.class_id = class_ids[index];
     detection.class_name = getClassName(class_ids[index]);
     detection.confidence = confidences[index];
@@ -111,10 +128,7 @@ std::vector<Detection> PostProcessor::process(
 
 bool PostProcessor::isVehicle(int class_id) const
 {
-  return class_id == 2 ||
-         class_id == 3 ||
-         class_id == 5 ||
-         class_id == 7;
+  return class_id == 2 || class_id == 3 || class_id == 5 || class_id == 7;
 }
 
 std::string PostProcessor::getClassName(int class_id) const
