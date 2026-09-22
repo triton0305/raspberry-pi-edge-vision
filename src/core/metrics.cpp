@@ -51,6 +51,8 @@ void Metrics::recordFrame(double inference_ms, std::size_t queue_size, std::uint
 
 void Metrics::recordMessageDelivery(double delivery_ms)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
+
   ++message_count_;
   delivery_total_ms_ += delivery_ms;
 }
