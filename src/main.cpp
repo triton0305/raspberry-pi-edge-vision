@@ -20,6 +20,7 @@
 #include "serializer.hpp"
 #include "tcp_client.hpp"
 #include "ack.hpp"
+#include "metrics.hpp"
 
 volatile std::sig_atomic_t running = 1;
 
@@ -115,6 +116,7 @@ int main(int argc, char* argv[])
   PostProcessor postprocessor(0.25f, 0.45f);
   Serializer serializer;
   TcpClient tcp_client(server_ip, server_port);
+  Metrics metrics;
 
   if (!camera.open())
   {
@@ -163,11 +165,19 @@ int main(int argc, char* argv[])
     const std::int64_t timestamp_ms = currentUnixTimeMs();
 
     cv::Mat blob = preprocessor.process(frame);
+
+    const auto inference_start = std::chrono::steady_clock::now();
     std::vector<cv::Mat> outputs = detector.infer(blob);
+    const auto inference_end = std::chrono::steady_clock::now();
+
+    const double inference_ms =
+      std::chrono::duration<double, std::milli>(inference_end - inference_start).count();
 
     std::vector<Detection> detections = postprocessor.process(
       outputs, frame.cols, frame.rows,
       preprocessor.inputWidth(), preprocessor.inputHeight());
+
+    metrics.recordFrame(inference_ms);
 
     for (const Detection& detection : detections)
     {
@@ -184,6 +194,8 @@ int main(int argc, char* argv[])
       if (!message.empty())
       {
         std::cout << message << '\n';
+
+        const auto delivery_start = std::chrono::steady_clock::now();
 
         bool ack_received = false;
 
@@ -241,6 +253,13 @@ int main(int argc, char* argv[])
             camera.release();
             return 1;
           }
+
+          const auto delivery_end = std::chrono::steady_clock::now();
+
+          const double delivery_ms =
+            std::chrono::duration<double, std::milli>(delivery_end - delivery_start).count();
+
+          metrics.recordMessageDelivery(delivery_ms);
 
           std::cout << "ACK OK: " << message_id << '\n';
           ack_received = true;

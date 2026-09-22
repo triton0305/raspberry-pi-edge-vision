@@ -21,6 +21,14 @@ bool Camera::open()
   capture_.set(cv::CAP_PROP_FRAME_HEIGHT, height_);
   capture_.set(cv::CAP_PROP_FPS, fps_);
 
+  const int actual_width = static_cast<int>(capture_.get(cv::CAP_PROP_FRAME_WIDTH));
+  const int actual_height = static_cast<int>(capture_.get(cv::CAP_PROP_FRAME_HEIGHT));
+  const double actual_fps = capture_.get(cv::CAP_PROP_FPS);
+
+  std::cout << "Camera: "
+            << actual_width << 'x' << actual_height
+            << " @ " << actual_fps << " FPS\n";
+
   return true;
 }
 

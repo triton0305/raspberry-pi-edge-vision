@@ -6,13 +6,17 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cmath>
 
 PostProcessor::PostProcessor(float conf_threshold, float nms_threshold)
   : conf_threshold_(conf_threshold), nms_threshold_(nms_threshold)
 {
 }
 
-std::vector<Detection> PostProcessor::process(const std::vector<cv::Mat>& outputs, int image_width, int image_height, int input_width, int input_height)
+std::vector<Detection> PostProcessor::process(
+  const std::vector<cv::Mat>& outputs,
+  int image_width, int image_height,
+  int input_width, int input_height)
 {
   std::vector<Detection> results;
 
@@ -34,8 +38,15 @@ std::vector<Detection> PostProcessor::process(const std::vector<cv::Mat>& output
   cv::Mat detections;
   cv::transpose(raw, detections);
 
-  const float x_factor = static_cast<float>(image_width) / input_width;
-  const float y_factor = static_cast<float>(image_height) / input_height;
+  const float scale = std::min(
+    static_cast<float>(input_width) / image_width,
+    static_cast<float>(input_height) / image_height);
+
+  const int resized_width = static_cast<int>(std::round(image_width * scale));
+  const int resized_height = static_cast<int>(std::round(image_height * scale));
+
+  const int pad_x = (input_width - resized_width) / 2;
+  const int pad_y = (input_height - resized_height) / 2;
 
   std::vector<cv::Rect> boxes;
   std::vector<float> confidences;
@@ -63,10 +74,10 @@ std::vector<Detection> PostProcessor::process(const std::vector<cv::Mat>& output
     if (!isVehicle(class_id) || confidence < conf_threshold_)
       continue;
 
-    int left = static_cast<int>((cx - width / 2.0f) * x_factor);
-    int top = static_cast<int>((cy - height / 2.0f) * y_factor);
-    int right = static_cast<int>((cx + width / 2.0f) * x_factor);
-    int bottom = static_cast<int>((cy + height / 2.0f) * y_factor);
+    int left = static_cast<int>((cx - width / 2.0f - pad_x) / scale);
+    int top = static_cast<int>((cy - height / 2.0f - pad_y) / scale);
+    int right = static_cast<int>((cx + width / 2.0f - pad_x) / scale);
+    int bottom = static_cast<int>((cy + height / 2.0f - pad_y) / scale);
 
     left = std::clamp(left, 0, image_width);
     top = std::clamp(top, 0, image_height);
