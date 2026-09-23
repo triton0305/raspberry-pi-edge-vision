@@ -11,6 +11,7 @@ constexpr const char* BOOT_ID_PATH = BOOT_ID_FILE_PATH;
 constexpr int PROTOCOL_VERSION = 1;
 constexpr int ACK_TIMEOUT_MS = 1500;
 constexpr int MAX_RETRY_COUNT = 2;
+constexpr int RECONNECT_DELAY_MS = 1000;
 constexpr std::size_t MAX_QUEUE_SIZE = 16;
 }
 

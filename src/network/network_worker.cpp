@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 
 #include "network/ack.hpp"
 #include "core/config.hpp"
@@ -34,31 +35,33 @@ void NetworkWorker::run()
                   << message.message_id << '\n';
       }
 
+      if (!tcp_client_.isConnected())
+      {
+        if (!tcp_client_.connectToServer())
+        {
+          std::cerr << "Failed to reconnect to server\n";
+          std::this_thread::sleep_for(std::chrono::milliseconds(Config::RECONNECT_DELAY_MS));
+          continue;
+        }
+      }
+
       if (!tcp_client_.sendData(message.payload))
       {
-        std::cerr << "Failed to send detection result\n";
-        fail();
-        return;
+        std::cerr << "Failed to send detection result: "
+                  << message.message_id << '\n';
+
+        tcp_client_.disconnect();
+        continue;
       }
 
       std::string ack_message;
 
       if (!tcp_client_.receiveData(ack_message))
       {
-        std::cerr << "ACK receive failed: " << message.message_id << '\n';
+        std::cerr << "ACK receive failed: "
+                  << message.message_id << '\n';
 
         tcp_client_.disconnect();
-
-        if (attempt < Config::MAX_RETRY_COUNT)
-        {
-          if (!tcp_client_.connectToServer())
-          {
-            std::cerr << "Failed to reconnect to server\n";
-            fail();
-            return;
-          }
-        }
-
         continue;
       }
 
@@ -99,8 +102,10 @@ void NetworkWorker::run()
       std::cerr << "ACK retry limit exceeded: "
                 << message.message_id << '\n';
 
-      fail();
-      return;
+      std::cerr << "Dropping undelivered message: "
+                << message.message_id << '\n';
+
+      continue;
     }
   }
 }
