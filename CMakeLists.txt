@@ -48,17 +48,17 @@ find_package(Threads REQUIRED)
 # Paths
 # =============================================================================
 
-set(MODEL_PATH
-    "${CMAKE_SOURCE_DIR}/models/yolo26n.onnx"
-)
+if(NOT DEFINED MODEL_PATH)
+  set(MODEL_PATH "${CMAKE_SOURCE_DIR}/models/yolo26n.onnx")
+endif()
 
 set(TEST_IMAGE_PATH
     "${CMAKE_SOURCE_DIR}/test/bus.jpg"
 )
 
-set(BOOT_ID_PATH
-    "${CMAKE_SOURCE_DIR}/boot_id.dat"
-)
+if(NOT DEFINED BOOT_ID_PATH)
+  set(BOOT_ID_PATH "${CMAKE_SOURCE_DIR}/boot_id.dat")
+endif()
 
 # =============================================================================
 # Sources

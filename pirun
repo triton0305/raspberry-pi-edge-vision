@@ -1,0 +1,3 @@
+#!/bin/bash
+
+sudo -u edgevision /opt/edge_vision/bin/edge_vision "$1" "$2"
