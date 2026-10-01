@@ -340,7 +340,7 @@ sudo -u edgevision \
   <server_ip> <server_port>
 ```
 
-Relay Server의 빌드 및 실행 방법은 [Edge Vision Relay Server](https://github.com/triton0305/edge-vision-relay-server)를 참고하세요.
+Relay Server의 빌드 및 실행 방법은 [Edge Vision Relay Server](https://github.com/triton0305/pi-edge-vision-relay-server)를 참고하세요.
 
 ## Project Structure
 
