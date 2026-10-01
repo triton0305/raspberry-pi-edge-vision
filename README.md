@@ -6,7 +6,7 @@
 
 Raspberry Pi 4에서 USB Webcam 영상을 YOLO26n ONNX로 처리해 차량 Detection을 생성하는 C++17 Vision Client입니다. 탐지 객체마다 `vision` JSON을 생성하고, 별도 네트워크 스레드를 통해 TCP/ACK 방식으로 전달합니다.
 
-독립 검증용 [Relay Server](https://github.com/triton0305/edge-vision-relay-server)를 구현해 Raspberry Pi Client → TCP → Relay Server → SQLite → ACK 전체 흐름을 실제 환경에서 검증했습니다.
+독립 검증용 [Relay Server](https://github.com/triton0305/pi-edge-vision-relay-server)를 구현해 Raspberry Pi Client → TCP → Relay Server → SQLite → ACK 전체 흐름을 실제 환경에서 검증했습니다.
 
 ## Key Features
 
