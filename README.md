@@ -177,7 +177,9 @@ ACK Timeout / Disconnect
 → Same message_id / Same payload Retry
 ```
 
-동일 `message_id`와 동일 payload가 다시 도착하면 정상적인 Retry로 처리하고, 동일 `message_id`에 다른 데이터가 들어오면 `MESSAGE_ID_CONFLICT`로 구분합니다. ACK는 DB 반영 또는 기존 데이터 확인 이후 전송하도록 하여 ACK 성공과 실제 저장 상태가 일치하도록 구성했습니다.
+동일 `message_id`가 다시 도착하면 SQLite의 UNIQUE 제약과 `INSERT OR IGNORE`를 통해 신규 행을 생성하지 않습니다. 이를 통해 ACK 유실 등으로 동일 Detection이 재전송되더라도 DB 중복 저장을 방지합니다.
+
+ACK는 DB 저장 처리 이후 전송하도록 구성했습니다.
 
 ### Vision / Network Fault Isolation
 
@@ -208,9 +210,9 @@ Detection
 → 5-second traffic_count
 ```
 
-실제 Raspberry Pi 환경에서 검증한 결과, 제한된 Camera FOV와 낮은 처리 FPS 환경에서는 연속 Tracking과 Line Crossing 조건을 안정적으로 유지하기 어려웠고 `traffic_count`가 기대한 형태로 생성되지 않았습니다.
+실제 Raspberry Pi 환경의 E2E 테스트에서 `traffic_count`가 기대한 형태로 생성되지 않았습니다. 제한된 Camera FOV와 낮은 처리 FPS 등 연속 Tracking 및 Line Crossing에 영향을 줄 수 있는 조건을 검토했고, 동시에 해당 데이터가 프로젝트에서 실제로 필요한 형태인지 다시 검토했습니다.
 
-이를 계기로 Detection 데이터와 Traffic Count가 서로 다른 의미를 가진다는 점을 다시 검토했습니다. 또한 시간 구간이나 집계 방식이 변경될 때마다 Edge Client의 로직까지 변경하는 구조보다, Client는 원본 Detection을 전달하고 저장된 데이터를 기반으로 필요한 통계를 후처리하는 구조가 확장에 더 적합하다고 판단했습니다.
+이를 계기로 Detection 데이터와 Traffic Count가 서로 다른 의미를 가진다는 점을 명확히 했습니다. 또한 시간 구간이나 집계 방식이 변경될 때마다 Edge Client의 로직까지 변경하는 구조보다, Client는 원본 Detection을 전달하고 저장된 데이터를 기반으로 필요한 통계를 후처리하는 구조가 확장에 더 적합하다고 판단했습니다.
 
 최종 Runtime에서는 Tracker, Line Crossing, `traffic_count`를 제외하고 다음과 같이 구조를 단순화했습니다.
 
