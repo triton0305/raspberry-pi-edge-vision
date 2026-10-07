@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/header.svg" alt="Raspberry Pi Edge Vision — OpenCV DNN vehicle detection and reliable TCP delivery" width="100%">
+  <img width="1200" height="248" alt="raspberry-pi-edge-vision-header" src="https://github.com/user-attachments/assets/d3f22def-6957-43ba-b652-55ad4015226d" />
 </p>
 
 <p align="center">
