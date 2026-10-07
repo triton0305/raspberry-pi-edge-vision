@@ -1,13 +1,22 @@
 <p align="center">
+  <img src="docs/assets/header.svg" alt="Raspberry Pi Edge Vision — OpenCV DNN vehicle detection and reliable TCP delivery" width="100%">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square" alt="C++17">
-  <img src="https://img.shields.io/badge/Raspberry_Pi-4-A22846?style=flat-square" alt="Raspberry Pi 4">
+  <img src="https://img.shields.io/badge/Raspberry_Pi-4-C51A4A?style=flat-square" alt="Raspberry Pi 4">
   <img src="https://img.shields.io/badge/OpenCV-DNN-5C3EE8?style=flat-square" alt="OpenCV DNN">
   <img src="https://img.shields.io/badge/YOLO26n-ONNX-168B91?style=flat-square" alt="YOLO26n ONNX">
   <img src="https://img.shields.io/badge/TCP-ACK%20%2F%20Retry-087F8C?style=flat-square" alt="TCP ACK Retry">
 </p>
 
 <p align="center">
-  <a href="#validation">Validation</a> · <a href="#demo">Demo</a> · <a href="#performance">Performance</a> · <a href="#architecture">Architecture</a> · <a href="#reliability">Reliability</a> · <a href="#build">Build</a>
+  <a href="#validation">Validation</a> ·
+  <a href="#demo">Demo</a> ·
+  <a href="#performance">Performance</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#reliability">Reliability</a> ·
+  <a href="#build">Build</a>
 </p>
 
 # Raspberry Pi Edge Vision
