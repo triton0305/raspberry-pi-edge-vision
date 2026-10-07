@@ -2,7 +2,7 @@
 
 **개발 기간:** 2026.09.21 ~ 2026.09.28
 
-**Jetson 버전:** 기존 파이프라인을 Jetson으로 이식하고 TensorRT 기반 GPU 추론을 적용한 [Jetson Edge Vision](https://github.com/triton0305/jetson-edge-vision)을 개발 중입니다.
+**Jetson 버전:** 기존 파이프라인을 Jetson으로 이식하고 TensorRT 기반 GPU 추론을 적용한 [Jetson Edge Vision](https://github.com/triton0305/jetson-edge-vision)으로 확장했습니다.
 
 Raspberry Pi 4에서 USB Webcam 영상을 YOLO26n ONNX로 처리해 차량 Detection을 생성하는 C++17 Vision Client입니다. 탐지 객체마다 `vision` JSON을 생성하고, 별도 네트워크 스레드를 통해 TCP/ACK 방식으로 전달합니다.
 
