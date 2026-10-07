@@ -20,9 +20,12 @@
 
 ## Development History
 
-| 기간 | 개발 내용 |
+| 날짜 | 개발 내용 |
 |---|---|
-| 2026.09.21 ~ 2026.09.28 | Raspberry Pi Vision Client · TCP/ACK Relay Server · SQLite E2E 검증 · Traffic Counting 실험 후 Vision-only Runtime 확정 |
+| [2026.09.21](https://github.com/triton0305/raspberry-pi-edge-vision/commit/e4134629aa3aff191d54960b538f36fbbebda7dd) | Raspberry Pi 기반 Edge Vision 초기 파이프라인 구현 |
+| [2026.09.22](https://github.com/triton0305/raspberry-pi-edge-vision/commit/f15bc1c34588f2f3ce497a2b0ca1502419ec9ed2) | JSON / ACK 신뢰성 전송, Vision·Network 분리, Bounded Queue 기반 Runtime 구조 완성 |
+| [2026.09.23](https://github.com/triton0305/raspberry-pi-edge-vision/commit/24fb74c877b88c2b1f7bd62b31e380f0980da2e6) | Network 장애와 Vision Runtime을 분리하고 독립 실행·재연결 구조 보강 |
+| [2026.09.28](https://github.com/triton0305/raspberry-pi-edge-vision/commit/be97376e2b1de833faf7a85f258c8687d2c2e938) | Tracking / Line Crossing / traffic_count 실험 후 최종 Runtime을 Vision-only 구조로 확정 |
 
 ## Validation
 
@@ -242,7 +245,7 @@ Class-aware NMS
 ## Demo
 
 <p align="center">
-  <img src="test/camera_result.jpg" alt="Raspberry Pi 4에서 OpenCV DNN으로 차량을 탐지하는 실행 결과" width="780">
+  <img width="799" height="508" alt="raspberry_pi_capture" src="https://github.com/user-attachments/assets/2694ed3e-80c7-4b49-a298-92ba781aa6cf" />
 </p>
 
 <p align="center"><sub>USB Webcam / OpenCV DNN 차량 탐지 결과</sub></p>
